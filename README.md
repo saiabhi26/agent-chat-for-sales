@@ -58,7 +58,7 @@ pnpm install
 
 ```bash
 pnpm add -D node-gyp
-./node_modules/.bin/node-gyp rebuild --directory node_modules/.pnpm/better-sqlite3@12.10.0/node_modules/better-sqlite3
+./node_modules/.bin/node-gyp rebuild --directory node_modules/.pnpm/better-sqlite3@12.11.1/node_modules/better-sqlite3
 ```
 
 **Create a `.env` file in the `backend` folder:**
