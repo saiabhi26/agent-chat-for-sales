@@ -53,7 +53,7 @@ export function filterTransactions(filters: {
 
   if (filters.salesRep) {
     query += " AND LOWER(sales_rep) LIKE ?";
-    params.push(`%${filters.salesRep.toLowerCase()}%`);
+    params.push(`${filters.salesRep.toLowerCase()}%`);
   }
   if (filters.region) {
     query += " AND LOWER(region) LIKE ?";
