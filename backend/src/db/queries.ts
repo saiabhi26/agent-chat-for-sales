@@ -72,7 +72,17 @@ export function filterTransactions(filters: {
     params.push(filters.dateTo);
   }
 
-  return sqlite.prepare(query).all(...params);
+  const rows = sqlite.prepare(query).all(...params) as any[];
+    return rows.map((row) => ({
+      id: row.id,
+      customerName: row.customer_name,
+      amount: row.amount,
+      currency: row.currency,
+      region: row.region,
+      salesRep: row.sales_rep,
+      date: row.date,
+      createdAt: row.created_at,
+    }));
 }
 
 // corrections
