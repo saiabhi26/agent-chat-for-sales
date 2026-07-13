@@ -19,9 +19,10 @@ services:
     dockerContext: ./backend
     healthCheckPath: /
     envVars:
-      # Replaced with the Vercel production URL once it exists (no trailing slash).
+      # The Vercel production origin. NO trailing slash: browsers send
+      # `Origin: https://host` without one, and Hono compares the string exactly.
       - key: FRONTEND_ORIGIN
-        value: http://localhost:3000
+        value: https://agent-chat-for-sales.vercel.app
 
       # ANTHROPIC_API_KEY is deliberately NOT set (spec D12).
       # The agent degrades gracefully without it, so a public URL carries
