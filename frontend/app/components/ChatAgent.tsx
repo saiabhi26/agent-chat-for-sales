@@ -20,7 +20,13 @@ export default function ChatAgent({ onResults, driftAlert }: Props) {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-  const [lastQuery, setLastQuery] = useState("");
+
+  // What the agent last *resolved to* — not what the user typed. Corrections
+  // are stored against the resolved value, so they fire on any phrasing that
+  // resolves the same way, rather than on a verbatim repeat of one sentence.
+  const [lastFilters, setLastFilters] = useState<Record<string, string> | null>(
+    null
+  );
 
   function addMessage(msg: Omit<ChatMessage, "id">) {
     setMessages((prev) => [
@@ -34,12 +40,12 @@ export default function ChatAgent({ onResults, driftAlert }: Props) {
 
     const query = input.trim();
     setInput("");
-    setLastQuery(query);
     addMessage({ role: "user", content: query });
     setLoading(true);
 
     try {
       const result = await queryAgent(query);
+      setLastFilters(result.filters as Record<string, string>);
 
       if (result.confidence === "low") {
         addMessage({
@@ -84,16 +90,45 @@ export default function ChatAgent({ onResults, driftAlert }: Props) {
     }
   }
 
-  async function handleCorrection() {
-    const corrected = prompt(
-      `I searched for "${lastQuery}". Who did you actually mean?`
-    );
-    if (!corrected) return;
+  // Fields the backend accepts a correction for, in the order we'd most likely
+  // have got them wrong.
+  const CORRECTABLE_FIELDS = ["salesRep", "customerName", "region"] as const;
 
-    await submitCorrection(lastQuery, corrected, "sales rep");
+  async function handleCorrection() {
+    const field = lastFilters
+      ? CORRECTABLE_FIELDS.find((f) => lastFilters[f])
+      : undefined;
+
+    if (!field || !lastFilters) {
+      addMessage({
+        role: "agent",
+        content: "Ask me something first, then you can tell me if I got it wrong.",
+      });
+      return;
+    }
+
+    // The value the agent resolved to — e.g. "John Smith" — is what we store
+    // the correction against, NOT the sentence the user typed.
+    const wrongValue = lastFilters[field];
+
+    const corrected = prompt(`I read that as "${wrongValue}". What did you mean?`);
+    if (!corrected?.trim()) return;
+
+    try {
+      await submitCorrection(wrongValue, corrected.trim(), field);
+    } catch (err) {
+      addMessage({
+        role: "agent",
+        content:
+          err instanceof Error ? err.message : "Couldn't save that correction.",
+      });
+      return;
+    }
+
+    setLastFilters({ ...lastFilters, [field]: corrected.trim() });
     addMessage({
       role: "agent",
-      content: `Got it. I'll remember that "${lastQuery}" means "${corrected}" next time.`,
+      content: `Got it — when I read "${wrongValue}", I'll take it as "${corrected.trim()}" from now on.`,
     });
   }
 

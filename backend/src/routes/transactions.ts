@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { v4 as uuidv4 } from "uuid";
 import { insertTransaction, getAllTransactions, filterTransactions } from "../db/queries";
-import { computeAnalytics, checkDrift } from "../services/analyticsService";
+import { computeAnalytics } from "../services/analyticsService";
+import { checkDrift } from "../services/drift";
+import { validateTransaction } from "../services/validateTransaction";
 import { broadcast } from "./sse";
 
 const app = new Hono();
@@ -21,26 +23,24 @@ app.get("/", (c) => {
 
 // create a new transaction
 app.post("/", async (c) => {
-  const body = await c.req.json();
+  let body: unknown;
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Body must be valid JSON" }, 400);
+  }
 
-  const { customerName, amount, currency, region, salesRep, date } = body;
-
-  if (!customerName || !amount || !currency || !region || !salesRep || !date) {
-    return c.json({ error: "All fields are required" }, 400);
+  // Analytics sums `amount` across every row, so a single NaN would poison the
+  // whole dashboard permanently, for every visitor. Nothing unvalidated is stored.
+  const validated = validateTransaction(body);
+  if (!validated.ok) {
+    return c.json({ error: "Invalid transaction", details: validated.errors }, 400);
   }
 
   // snapshot analytics before insert for drift detection
   const before = computeAnalytics().avgDealSizeByRegion;
 
-  const tx = {
-    id: uuidv4(),
-    customerName,
-    amount: parseFloat(amount),
-    currency,
-    region,
-    salesRep,
-    date,
-  };
+  const tx = { id: uuidv4(), ...validated.value };
 
   insertTransaction(tx);
 

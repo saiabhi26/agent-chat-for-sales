@@ -41,25 +41,5 @@ export function computeAnalytics(): Analytics {
   };
 }
 
-// drift detection — monitors avg deal size by region
-// alerts when a new transaction moves a region's average by more than 20%
-export function checkDrift(
-  before: Record<string, number>,
-  after: Record<string, number>
-): { region: string; before: number; after: number } | null {
-  for (const region in after) {
-    if (!before[region]) continue;
-
-    const change = Math.abs(after[region] - before[region]) / before[region];
-
-    if (change >= 0.1) {
-      return {
-        region,
-        before: Math.round(before[region]),
-        after: Math.round(after[region]),
-      };
-    }
-  }
-
-  return null;
-}
+// Drift detection lives in ./drift.ts — it is pure, so it is unit-tested
+// without dragging in the database this module opens at import time.

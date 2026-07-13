@@ -53,5 +53,11 @@ export async function submitCorrection(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ originalTerm, resolvedTo, context }),
   });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error ?? "Couldn't save that correction.");
+  }
+
   return res.json();
 }
