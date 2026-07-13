@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Match the Dockerfile. Newer Node has no better-sqlite3 prebuilt binary and
+  # would fall back to a source compile.
+  NODE_VERSION: "22"
+  BACKEND_URL: https://agent-chat-for-sales-api.onrender.com
+
+jobs:
+  test:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: |
+            backend/pnpm-lock.yaml
+            frontend/pnpm-lock.yaml
+
+      - name: Install backend
+        working-directory: backend
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck backend
+        working-directory: backend
+        run: pnpm typecheck
+
+      # Also validates seed.json against its schema — see seedData.test.ts.
+      # No live Claude calls: the API key is deliberately absent here.
+      - name: Test backend
+        working-directory: backend
+        run: pnpm test
+
+      - name: Install frontend
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: pnpm lint
+
+      # `next build` typechecks, so this is the frontend's typecheck too.
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm build
+
+  deploy:
+    name: Deploy to Render and smoke-test
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      # Render's own auto-deploy is off (autoDeploy: false in render.yaml) so
+      # that this is the only way to production, and `needs: test` gates it.
+      - name: Trigger Render deploy
+        run: curl -fsS -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}"
+
+      # A 200 from the health endpoint is not enough: the *previous* container
+      # keeps serving while the new one builds, so a naive check would pass
+      # against the old code. Poll until the deployed commit is this one.
+      - name: Wait for the new commit to be live
+        run: |
+          for i in $(seq 1 60); do
+            live=$(curl -fsS --max-time 10 "$BACKEND_URL/" | jq -r '.commit // empty' || true)
+            if [ "$live" = "$GITHUB_SHA" ]; then
+              echo "commit $GITHUB_SHA is live (after $((i * 10))s)"
+              exit 0
+            fi
+            echo "attempt $i: live=${live:-<unreachable>} want=$GITHUB_SHA"
+            sleep 10
+          done
+          echo "::error::timed out after 10min waiting for $GITHUB_SHA to go live"
+          exit 1
+
+      - name: Smoke test
+        run: |
+          echo "--- the fixture seeded ---"
+          count=$(curl -fsS "$BACKEND_URL/api/analytics" | jq -r '.totalTransactions')
+          [ "$count" = "120" ] || { echo "::error::expected 120 transactions, got $count"; exit 1; }
+
+          # Spec D12: production runs with NO API key until the rate limiter and
+          # budget cap land. This assertion is what stops the key being set early
+          # by accident. PHASE 4 MUST FLIP THIS TO "true" when the key goes in.
+          echo "--- no API key in production (spec D12) ---"
+          enabled=$(curl -fsS "$BACKEND_URL/" | jq -r '.agentEnabled')
+          [ "$enabled" = "false" ] || { echo "::error::ANTHROPIC_API_KEY is set in production but guardrails have not landed"; exit 1; }
+
+          echo "--- SSE streams (the feature a proxy is most likely to break) ---"
+          curl -fsS --max-time 5 -N "$BACKEND_URL/api/sse" | head -c 200 | grep -q "event: connected" \
+            || { echo "::error::SSE did not deliver a connected event"; exit 1; }
+
+          echo "all smoke tests passed"

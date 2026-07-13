@@ -1,5 +1,7 @@
 # agent-chat-for-sales
 
+[![CI](https://github.com/saiabhi26/agent-chat-for-sales/actions/workflows/ci.yml/badge.svg)](https://github.com/saiabhi26/agent-chat-for-sales/actions/workflows/ci.yml)
+
 A real-time sales analytics dashboard with an AI chat agent that learns from corrections. Built with Next.js, Hono, SQLite, and Anthropic Claude.
 
 ---

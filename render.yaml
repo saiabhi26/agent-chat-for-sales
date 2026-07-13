@@ -14,7 +14,14 @@ services:
     runtime: docker
     plan: free
     region: oregon
-    branch: phase-1-deploy
+    branch: main
+
+    # Deploys are triggered by GitHub Actions, not by Render watching the branch.
+    # If Render auto-deployed, it would race CI and ship code whose tests had not
+    # passed -- the pipeline would gate nothing. The only route to production is
+    # .github/workflows/ci.yml, where the deploy job declares `needs: test`.
+    autoDeploy: false
+
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /

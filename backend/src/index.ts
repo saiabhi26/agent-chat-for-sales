@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { config } from "./config";
 import { seedIfEmpty } from "./services/seedService";
+import { isAgentEnabled } from "./services/agentService";
 import transactionsRoute from "./routes/transactions";
 import analyticsRoute from "./routes/analytics";
 import agentRoute from "./routes/agent";
@@ -19,7 +20,15 @@ app.route("/api/analytics", analyticsRoute);
 app.route("/api/agent", agentRoute);
 app.route("/api/sse", sseRoute);
 
-app.get("/", (c) => c.json({ status: "ok" }));
+// Health check. `commit` lets CI confirm the code it just pushed is the code
+// actually serving traffic; a bare 200 would also come from the old container.
+app.get("/", (c) =>
+  c.json({
+    status: "ok",
+    commit: config.commit,
+    agentEnabled: isAgentEnabled(),
+  })
+);
 
 seedIfEmpty();
 

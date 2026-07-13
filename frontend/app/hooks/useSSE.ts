@@ -9,7 +9,12 @@ type SSEHandlers = {
 
 export function useSSE(handlers: SSEHandlers) {
   const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
+
+  // Keep the ref current without re-subscribing: the EventSource effect below
+  // runs once, but must always call the latest handlers.
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
     const es = new EventSource(`${API_BASE_URL}/api/sse`);
