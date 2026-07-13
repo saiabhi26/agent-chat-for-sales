@@ -15,14 +15,25 @@ export default function Home() {
   const [driftAlert, setDriftAlert] = useState<DriftAlert | null>(null);
   const [activeFilters, setActiveFilters] = useState<Record<string, string>>({});
   const [showModal, setShowModal] = useState(false);
-  
+  const [loadError, setLoadError] = useState<string | null>(null);
+
   async function loadData(filters?: Record<string, string>) {
-    const [txs, analytics] = await Promise.all([
-      fetchTransactions(filters),
-      fetchAnalytics(),
-    ]);
-    setTransactions(txs);
-    setAnalytics(analytics);
+    try {
+      const [txs, analytics] = await Promise.all([
+        fetchTransactions(filters),
+        fetchAnalytics(),
+      ]);
+      setTransactions(txs);
+      setAnalytics(analytics);
+      setLoadError(null);
+    } catch {
+      // The backend sleeps after 15 minutes idle and takes ~11s to wake, so the
+      // very first fetch can genuinely fail. Without this the dashboard just sat
+      // blank forever with no explanation.
+      setLoadError(
+        "Couldn't reach the backend. It sleeps when idle and takes a few seconds to wake up."
+      );
+    }
   }
 
   useEffect(() => {
@@ -71,6 +82,18 @@ export default function Home() {
             + New transaction
           </button>
         </div>
+
+        {loadError && (
+          <div className="bg-red-50 border border-red-200 text-red-800 text-sm px-4 py-3 rounded-lg mb-6 flex items-center justify-between gap-4">
+            <span>{loadError}</span>
+            <button
+              onClick={() => loadData(activeFilters)}
+              className="border border-red-300 text-red-800 px-3 py-1 rounded text-xs whitespace-nowrap"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         <AnalyticsCards analytics={analytics} />
 

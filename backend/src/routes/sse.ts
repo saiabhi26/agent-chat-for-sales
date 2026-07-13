@@ -27,11 +27,14 @@ function removeClient(id: string) {
 export function broadcast(event: string, data: unknown) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 
-  for (const client of clients) {
+  // Iterate over a copy: dead clients are spliced out of `clients` below.
+  for (const client of [...clients]) {
     try {
       client.controller.enqueue(encoder.encode(payload));
     } catch {
-      // client disconnected, will be cleaned up
+      // The stream is gone. Drop the client — the old code swallowed this and
+      // left it in the array, to be written to on every broadcast forever.
+      removeClient(client.id);
     }
   }
 }

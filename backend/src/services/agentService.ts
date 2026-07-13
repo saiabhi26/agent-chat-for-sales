@@ -1,6 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { config } from "../config";
 import { getAllCorrections, insertCorrection } from "../db/queries";
+import { applyCorrectionsToFilters } from "./corrections";
+import { parseAgentResponse, AgentParseError, type ParsedQuery } from "./parseAgentResponse";
+
+export { AgentParseError };
+export type { ParsedQuery };
 
 // The SDK throws at construction when it cannot resolve a key, so this must
 // stay lazy — an eager `new Anthropic()` crashes the server on boot.
@@ -13,41 +18,19 @@ export function isAgentEnabled(): boolean {
   return client !== null;
 }
 
-export type ParsedQuery = {
-  filters: {
-    salesRep?: string;
-    region?: string;
-    customerName?: string;
-    dateFrom?: string;
-    dateTo?: string;
-  };
-  interpretation: string;
-  confidence: "high" | "low";
-};
-
 export type CorrectionInput = {
   originalTerm: string;
   resolvedTo: string;
   context: string;
 };
 
-// apply stored corrections to raw query before sending to Claude
-function applyCorrections(query: string): string {
-  const corrections = getAllCorrections();
-  let corrected = query;
-
-  for (const c of corrections) {
-    const regex = new RegExp(c.originalTerm, "gi");
-    corrected = corrected.replace(regex, c.resolvedTo);
-  }
-
-  return corrected;
-}
+/** Only 200 chars of query reach the prompt. Caps both cost and injection surface. */
+const MAX_QUERY_LENGTH = 200;
 
 export async function parseQuery(rawQuery: string): Promise<ParsedQuery> {
   if (!client) throw new Error("Agent is not configured");
 
-  const correctedQuery = applyCorrections(rawQuery);
+  const query = rawQuery.slice(0, MAX_QUERY_LENGTH);
 
   const message = await client.messages.create({
     model: "claude-sonnet-4-5",
@@ -59,7 +42,7 @@ export async function parseQuery(rawQuery: string): Promise<ParsedQuery> {
 
 Parse this query into filters and return ONLY valid JSON. No explanation. No markdown.
 
-Query: "${correctedQuery}"
+Query: "${query}"
 
 Available filters:
 - salesRep: string (partial name ok)
@@ -90,22 +73,18 @@ Only include filters that are clearly mentioned. Null means not filtered.`,
     ],
   });
 
-  const raw = message.content[0].type === "text" ? message.content[0].text : "{}";
-  const clean = raw.replace(/```json|```/g, "").trim();
-  const parsed = JSON.parse(clean);
+  const block = message.content[0];
+  const raw = block?.type === "text" ? block.text : "";
 
-  // clean out null values from filters
-  const filters: ParsedQuery["filters"] = {};
-  for (const [key, value] of Object.entries(parsed.filters)) {
-    if (value !== null && value !== undefined) {
-      filters[key as keyof ParsedQuery["filters"]] = value as string;
-    }
-  }
+  // Throws AgentParseError on prose, markdown, or a truncated response. The
+  // route turns that into a 502 rather than an unhandled 500.
+  const parsed = parseAgentResponse(raw);
 
+  // Corrections are applied to what the model *resolved to*, not to the raw
+  // query text. That is what makes the memory actually fire — see corrections.ts.
   return {
-    filters,
-    interpretation: parsed.interpretation,
-    confidence: parsed.confidence,
+    ...parsed,
+    filters: applyCorrectionsToFilters(parsed.filters, getAllCorrections()),
   };
 }
 
