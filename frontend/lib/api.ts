@@ -25,6 +25,18 @@ export async function createTransaction(data: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+
+  // This used to return res.json() unconditionally, so it never threw — the
+  // modal's catch could not fire, and a REJECTED transaction (a validation 400,
+  // and now a rate-limit 429) closed the modal as if it had worked.
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    const details = Array.isArray(body.details) ? body.details.join(", ") : null;
+    throw new Error(
+      body.message ?? details ?? body.error ?? "Couldn't create that transaction."
+    );
+  }
+
   return res.json();
 }
 
@@ -56,7 +68,11 @@ export async function submitCorrection(
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.error ?? "Couldn't save that correction.");
+    // Prefer `message` — it is the human-readable one. `error` is a machine code
+    // like "rate_limited", which is not something to show a user.
+    throw new Error(
+      body.message ?? body.error ?? "Couldn't save that correction."
+    );
   }
 
   return res.json();

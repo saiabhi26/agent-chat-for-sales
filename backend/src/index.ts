@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { config } from "./config";
 import { seedIfEmpty } from "./services/seedService";
 import { isAgentEnabled } from "./services/agentService";
+import { dailyBudget } from "./services/guardrails";
 import transactionsRoute from "./routes/transactions";
 import analyticsRoute from "./routes/analytics";
 import agentRoute from "./routes/agent";
@@ -22,11 +23,14 @@ app.route("/api/sse", sseRoute);
 
 // Health check. `commit` lets CI confirm the code it just pushed is the code
 // actually serving traffic; a bare 200 would also come from the old container.
+// `budget` makes the day's spend observable without reading the Anthropic
+// console — and tells us immediately if something is draining it.
 app.get("/", (c) =>
   c.json({
     status: "ok",
     commit: config.commit,
     agentEnabled: isAgentEnabled(),
+    budget: dailyBudget.status(),
   })
 );
 

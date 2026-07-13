@@ -49,8 +49,12 @@ export default function TransactionModal({ onClose, onSuccess }: Props) {
       await createTransaction(form);
       onSuccess();
       onClose();
-    } catch {
-      setError("Failed to create transaction. Try again.");
+    } catch (err) {
+      // Show what the server actually said — which field was invalid, or how
+      // long to wait — rather than a generic failure the user can't act on.
+      setError(
+        err instanceof Error ? err.message : "Failed to create transaction."
+      );
     }
 
     setLoading(false);

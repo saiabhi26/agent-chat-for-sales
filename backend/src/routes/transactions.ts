@@ -4,6 +4,8 @@ import { insertTransaction, getAllTransactions, filterTransactions } from "../db
 import { computeAnalytics } from "../services/analyticsService";
 import { checkDrift } from "../services/drift";
 import { validateTransaction } from "../services/validateTransaction";
+import { clientIpFromForwardedFor } from "../services/clientIp";
+import { writeLimiter } from "../services/guardrails";
 import { broadcast } from "./sse";
 
 const app = new Hono();
@@ -23,6 +25,19 @@ app.get("/", (c) => {
 
 // create a new transaction
 app.post("/", async (c) => {
+  // Every insert is broadcast over SSE to every connected client and shifts the
+  // analytics everyone is looking at. A loop here would spam the live demo.
+  const limit = writeLimiter.check(
+    clientIpFromForwardedFor(c.req.header("x-forwarded-for"))
+  );
+  if (!limit.allowed) {
+    return c.json(
+      { error: "rate_limited", message: "Too many transactions at once." },
+      429,
+      { "Retry-After": String(limit.retryAfterSeconds) }
+    );
+  }
+
   let body: unknown;
   try {
     body = await c.req.json();
