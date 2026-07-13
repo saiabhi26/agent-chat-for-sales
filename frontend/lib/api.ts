@@ -34,6 +34,12 @@ export async function queryAgent(query: string): Promise<ParsedQuery> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
   });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? "The agent is unavailable right now.");
+  }
+
   return res.json();
 }
 

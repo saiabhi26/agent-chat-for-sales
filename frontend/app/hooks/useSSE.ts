@@ -26,9 +26,8 @@ export function useSSE(handlers: SSEHandlers) {
       handlersRef.current.onDrift?.(JSON.parse(e.data));
     });
 
-    es.onerror = () => {
-      es.close();
-    };
+    // No onerror handler: EventSource reconnects automatically, and closing
+    // the stream here would permanently kill it on the first transient blip.
 
     return () => {
       es.close();

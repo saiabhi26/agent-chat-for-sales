@@ -1,11 +1,22 @@
 import { Hono } from "hono";
-import { parseQuery, storeCorrection } from "../services/agentService";
+import { parseQuery, storeCorrection, isAgentEnabled } from "../services/agentService";
 import { filterTransactions } from "../db/queries";
 
 const app = new Hono();
 
 // parse a natural language query and return filters + results
 app.post("/query", async (c) => {
+  if (!isAgentEnabled()) {
+    return c.json(
+      {
+        error: "agent_unavailable",
+        message:
+          "The AI agent is not configured in this environment. The dashboard, filters, and live updates all still work.",
+      },
+      503
+    );
+  }
+
   const { query } = await c.req.json();
 
   if (!query) {

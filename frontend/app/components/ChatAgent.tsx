@@ -55,8 +55,12 @@ export default function ChatAgent({ onResults, driftAlert }: Props) {
         });
         onResults(result.filters as Record<string, string>);
       }
-    } catch {
-      addMessage({ role: "agent", content: "Something went wrong. Try again." });
+    } catch (err) {
+      addMessage({
+        role: "agent",
+        content:
+          err instanceof Error ? err.message : "Something went wrong. Try again.",
+      });
     }
 
     setLoading(false);
