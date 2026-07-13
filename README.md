@@ -54,14 +54,11 @@ cd backend
 pnpm install
 ```
 
-**Important — rebuild better-sqlite3 for your machine:**
+`better-sqlite3` is a native module, but no manual rebuild step is needed: `pnpm.onlyBuiltDependencies` in `backend/package.json` lets pnpm run its install script, which downloads a prebuilt binary (or compiles one if your Node version is new enough that no prebuild exists yet).
 
-```bash
-pnpm add -D node-gyp
-./node_modules/.bin/node-gyp rebuild --directory node_modules/.pnpm/better-sqlite3@12.11.1/node_modules/better-sqlite3
-```
+**Optional — create a `.env` file in the `backend` folder:**
 
-**Create a `.env` file in the `backend` folder:**
+Copy `backend/.env.example` to `backend/.env`. Every value has a working localhost default, so the app runs without it. Setting `ANTHROPIC_API_KEY` enables the AI chat; **without it the chat degrades gracefully and everything else — dashboard, filters, live updates — still works.**
 
 ```
 ANTHROPIC_API_KEY=your_api_key_here
