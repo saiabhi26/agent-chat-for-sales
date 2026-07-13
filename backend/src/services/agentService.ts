@@ -1,7 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { config } from "../config";
 import { getAllCorrections, insertCorrection } from "../db/queries";
 
-const client = new Anthropic();
+// The SDK throws at construction when it cannot resolve a key, so this must
+// stay lazy — an eager `new Anthropic()` crashes the server on boot.
+const client = config.anthropicApiKey
+  ? new Anthropic({ apiKey: config.anthropicApiKey })
+  : null;
+
+/** False when no API key is configured. The agent route 503s in that case. */
+export function isAgentEnabled(): boolean {
+  return client !== null;
+}
 
 export type ParsedQuery = {
   filters: {
@@ -35,6 +45,8 @@ function applyCorrections(query: string): string {
 }
 
 export async function parseQuery(rawQuery: string): Promise<ParsedQuery> {
+  if (!client) throw new Error("Agent is not configured");
+
   const correctedQuery = applyCorrections(rawQuery);
 
   const message = await client.messages.create({

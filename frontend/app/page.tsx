@@ -26,11 +26,18 @@ export default function Home() {
   }
 
   useEffect(() => {
+    // loadData is async, so its setState calls land after an await rather than
+    // synchronously in the effect body — the rule can't see through the call.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   }, []);
 
   const activeFiltersRef = useRef(activeFilters);
-  activeFiltersRef.current = activeFilters;
+
+  // Lets the SSE handler below read the current filters without re-subscribing.
+  useEffect(() => {
+    activeFiltersRef.current = activeFilters;
+  }, [activeFilters]);
 
   useSSE({
     onTransaction: () => loadData(activeFiltersRef.current),

@@ -1,0 +1,37 @@
+# Render Blueprint — backend only.
+# The Next.js frontend deploys to Vercel, deliberately: Render's free tier
+# spins down after 15 min idle and takes ~60s to wake. Serving the frontend
+# from the same sleeping container would mean a blank browser tab for that
+# minute. On Vercel's CDN the page paints instantly and only the data waits.
+#
+# No disk is attached. Render's free tier does not support persistent disks,
+# and it does not matter: the backend seeds SQLite from a committed
+# seed.json fixture on boot, so a wiped filesystem is simply a fresh demo.
+
+services:
+  - type: web
+    name: agent-chat-for-sales-api
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+
+    # Deploys are triggered by GitHub Actions, not by Render watching the branch.
+    # If Render auto-deployed, it would race CI and ship code whose tests had not
+    # passed -- the pipeline would gate nothing. The only route to production is
+    # .github/workflows/ci.yml, where the deploy job declares `needs: test`.
+    autoDeploy: false
+
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /
+    envVars:
+      # The Vercel production origin. NO trailing slash: browsers send
+      # `Origin: https://host` without one, and Hono compares the string exactly.
+      - key: FRONTEND_ORIGIN
+        value: https://agent-chat-for-sales.vercel.app
+
+      # ANTHROPIC_API_KEY is deliberately NOT set (spec D12).
+      # The agent degrades gracefully without it, so a public URL carries
+      # zero spend exposure until rate limiting and a budget cap land.
+      # PORT is injected by Render — do not declare it.

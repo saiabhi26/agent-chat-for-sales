@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { API_BASE_URL } from "@/lib/config";
 
 type SSEHandlers = {
   onTransaction?: (data: unknown) => void;
@@ -8,10 +9,15 @@ type SSEHandlers = {
 
 export function useSSE(handlers: SSEHandlers) {
   const handlersRef = useRef(handlers);
-  handlersRef.current = handlers;
+
+  // Keep the ref current without re-subscribing: the EventSource effect below
+  // runs once, but must always call the latest handlers.
+  useEffect(() => {
+    handlersRef.current = handlers;
+  });
 
   useEffect(() => {
-    const es = new EventSource("http://localhost:3001/api/sse");
+    const es = new EventSource(`${API_BASE_URL}/api/sse`);
 
     es.addEventListener("transaction", (e) => {
       handlersRef.current.onTransaction?.(JSON.parse(e.data));
@@ -25,9 +31,8 @@ export function useSSE(handlers: SSEHandlers) {
       handlersRef.current.onDrift?.(JSON.parse(e.data));
     });
 
-    es.onerror = () => {
-      es.close();
-    };
+    // No onerror handler: EventSource reconnects automatically, and closing
+    // the stream here would permanently kill it on the first transient blip.
 
     return () => {
       es.close();

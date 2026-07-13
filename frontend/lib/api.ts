@@ -1,6 +1,5 @@
 import { Analytics, ParsedQuery } from "@/app/types";
-
-const BASE_URL = "http://localhost:3001";
+import { API_BASE_URL as BASE_URL } from "@/lib/config";
 
 export async function fetchTransactions(filters?: Record<string, string>) {
   const params = new URLSearchParams(filters || {});
@@ -35,6 +34,12 @@ export async function queryAgent(query: string): Promise<ParsedQuery> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
   });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.message ?? "The agent is unavailable right now.");
+  }
+
   return res.json();
 }
 

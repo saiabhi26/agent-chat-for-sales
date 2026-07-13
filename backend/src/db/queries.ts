@@ -2,8 +2,9 @@ import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { eq, like, gte, lte } from "drizzle-orm";
 import { transactions, corrections } from "./schema";
+import { config } from "../config";
 
-const sqlite = new Database("sales.db");
+const sqlite = new Database(config.databasePath);
 export const db = drizzle(sqlite);
 
 // run migrations on startup
