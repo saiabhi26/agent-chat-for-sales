@@ -27,7 +27,11 @@ RUN test -f dist/db/seed.json || (echo "seed.json missing from build output" && 
 
 ENV NODE_ENV=production
 
-# Documentation only. Render injects PORT at runtime and config.ts reads it.
-EXPOSE 3001
+# NOT just documentation: Render reads EXPOSE to decide where to route traffic.
+# It must match the port the app actually listens on, or the edge routes to a
+# dead port and returns intermittent 404s (x-render-routing: no-server) while a
+# background port scan slowly finds the real one. 10000 is Render's default PORT.
+ENV PORT=10000
+EXPOSE 10000
 
 CMD ["node", "dist/index.js"]
