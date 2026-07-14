@@ -96,12 +96,21 @@ jobs:
           count=$(curl -fsS "$BACKEND_URL/api/analytics" | jq -r '.totalTransactions')
           [ "$count" = "120" ] || { echo "::error::expected 120 transactions, got $count"; exit 1; }
 
-          # Spec D12: production runs with NO API key until the rate limiter and
-          # budget cap land. This assertion is what stops the key being set early
-          # by accident. PHASE 4 MUST FLIP THIS TO "true" when the key goes in.
-          echo "--- no API key in production (spec D12) ---"
+          # Phase 4 landed the guardrails, so the key is now set in production and
+          # this assertion is inverted: it used to prove the key was ABSENT, and
+          # now it proves the agent is actually alive. A silently-unset key would
+          # otherwise deploy green while the headline feature 503s for every visitor.
+          echo "--- the agent is configured ---"
           enabled=$(curl -fsS "$BACKEND_URL/" | jq -r '.agentEnabled')
-          [ "$enabled" = "false" ] || { echo "::error::ANTHROPIC_API_KEY is set in production but guardrails have not landed"; exit 1; }
+          [ "$enabled" = "true" ] || { echo "::error::ANTHROPIC_API_KEY is not set in production — the agent is dead"; exit 1; }
+
+          # The guardrails are the reason the key is allowed to be here at all.
+          # If the budget block is missing, an old container without the limits is
+          # serving traffic with a live key — fail rather than let that ride.
+          echo "--- the spend guardrails are live ---"
+          limit=$(curl -fsS "$BACKEND_URL/" | jq -r '.budget.limit')
+          [ "$limit" != "null" ] && [ "$limit" -gt 0 ] \
+            || { echo "::error::no daily budget reported — guardrails are not in the running container"; exit 1; }
 
           echo "--- SSE streams (the feature a proxy is most likely to break) ---"
           curl -fsS --max-time 5 -N "$BACKEND_URL/api/sse" | head -c 200 | grep -q "event: connected" \

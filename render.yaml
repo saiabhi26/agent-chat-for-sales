@@ -31,7 +31,12 @@ services:
       - key: FRONTEND_ORIGIN
         value: https://agent-chat-for-sales.vercel.app
 
-      # ANTHROPIC_API_KEY is deliberately NOT set (spec D12).
-      # The agent degrades gracefully without it, so a public URL carries
-      # zero spend exposure until rate limiting and a budget cap land.
+      # The agent's key. Declared here but NOT valued: `sync: false` means the
+      # value lives only in Render's dashboard, marked secret. Declaring it is
+      # not cosmetic -- a Blueprint sync treats this file as the source of truth
+      # for env vars, so an undeclared variable can be wiped on the next sync,
+      # silently disabling the agent in production.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+
       # PORT is injected by Render — do not declare it.
